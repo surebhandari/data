@@ -95,7 +95,10 @@ def process_veryfi_data(ti):
         # we should get the current total value for this document_id
         # and start adding to it.
         print('current business id =' + str(json_object['business_id']))
-        total = int(get_current_total_for_business(json_object['business_id'])[0][0])
+        if(len(get_current_total_for_business(json_object['business_id'])) != 0):
+            total = int(get_current_total_for_business(json_object['business_id'])[0][0])
+        else:
+            total = 0
         print("starting total  = " + str(total))
         # json_object['total'] can be a list or dictionary
         business_id = record[0]
@@ -144,21 +147,7 @@ with DAG(
     catchup=False
 ) as dag:
 
-
-    # 1. Get the data from the documents dable table in veryfi database
-    task_get_veryfi_data = PythonOperator(
-        task_id='get_veryfi_data',
-        python_callable=get_veryfi_data,
-        do_xcom_push=True
-    )
-
-     # 2. Process the verify data
-    task_process_veryfi_data = PythonOperator(
-        task_id='process_veryfi_data',
-        python_callable=process_veryfi_data
-    )
-
-    #3 create an output table
+    #1 create an output table
     task_create_output_table = PostgresOperator(
         task_id="create_output_table",
         postgres_conn_id="postgres",
@@ -169,10 +158,24 @@ with DAG(
             );"""
     )
 
+
+    # 2. Get the data from the documents dable table in veryfi database
+    task_get_veryfi_data = PythonOperator(
+        task_id='get_veryfi_data',
+        python_callable=get_veryfi_data,
+        do_xcom_push=True
+    )
+
+     # 3. Process the verify data
+    task_process_veryfi_data = PythonOperator(
+        task_id='process_veryfi_data',
+        python_callable=process_veryfi_data
+    )
+
     # 4. Write to the output table
     task_write_veryfi_data = PythonOperator(
         task_id='write_veryfi_data',
         python_callable=write_veryfi_data
     )
     
-task_get_veryfi_data >> task_process_veryfi_data  >> task_create_output_table >> task_write_veryfi_data
+task_create_output_table >> task_get_veryfi_data >> task_process_veryfi_data >> task_write_veryfi_data
