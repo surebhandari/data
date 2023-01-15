@@ -4,6 +4,10 @@ import json
 
 from sqlalchemy import create_engine
 
+# This file simulates the receipt data generation and loading every 3 seconds.
+# It generates and persists the data in the documents table
+# Following parameters are for database details to connect to.
+
 db_name = 'veryfidb'
 db_user = 'veryfi'
 db_pass = 'veryfi'
