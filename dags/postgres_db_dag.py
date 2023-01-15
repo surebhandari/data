@@ -6,6 +6,14 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 import json
 
 def get_current_total_for_business(business_id):
+    '''
+    This method returns the current total value of a given business_id
+    Since the data is always flowing in the system, before processing
+    the records of the same business_id, we query the current value first
+    before updating it.
+    :param business_id:
+    :return:
+    '''
     sql_stmt = "SELECT total FROM total where document_id = " + str(business_id)
     pg_hook = PostgresHook(
         postgres_conn_id='postgres',
@@ -22,6 +30,10 @@ def get_current_total_for_business(business_id):
     return rs
 
 def get_current_batch_id():
+    '''
+    This procedure returns the first document index to start the next batch processing.
+    :return:
+    '''
     sql_stmt = "SELECT * FROM tracker"
     pg_hook = PostgresHook(
         postgres_conn_id='postgres',
@@ -35,7 +47,13 @@ def get_current_batch_id():
     print(rs)
     return rs
 
+
 def update_next_batch_id(total_records):
+    '''
+    This procedure updates the tracker table with the start index of document for next batch processing.
+    :param total_records:
+    :return:
+    '''
     print('inside update next batch id')
     next_batch_id = get_current_batch_id()[0][0] + total_records
     print(next_batch_id)
@@ -50,11 +68,12 @@ def update_next_batch_id(total_records):
     pg_conn.commit()
 
 def get_veryfi_data():
-    # getting batch of records
-    # get the current batch_size which represents the start of document_id from 
-    # where we need to process next 2000 records
-    # once the processing is done, update the tracker table with 
-    # the next batch starting document_id.
+    '''
+    This procedure gets the data in batches(of 2000) from the documents table
+    It only returns the cursor to records that are not processed earlier
+    It does so by getting the records between the start index of batch from the tracker table.
+    :return: cursor to set of records that needs to be processed
+    '''
     print('first call get_current_batch_id')
     id_list = get_current_batch_id()
     print('id_list should be a list')
@@ -78,6 +97,15 @@ def get_veryfi_data():
     return cursor.fetchall()
 
 def process_veryfi_data(ti):
+    '''
+    It pulls the data from the get_veryfi_data and processes it for
+    the total value of each business_id. It first gets the total value
+    for a business_id from the total table and then updates that by adding
+    the new value to it. At the end it updates the next batch index in the
+    tracker table and returns a map of key = business_id and value = total value
+    :param ti:
+    :return:
+    '''
     docs = ti.xcom_pull(task_ids=['get_veryfi_data'])
     print('I am expecting only one document')
     print(docs)
@@ -118,6 +146,12 @@ def process_veryfi_data(ti):
     return post_map
 
 def write_veryfi_data(ti):
+    '''
+    This procedure gets the data from process_veryfi_data and write it
+    to the total table. It's an upsert for the business_id.
+    :param ti:
+    :return:
+    '''
     docs = ti.xcom_pull(task_ids=['process_veryfi_data'])
     # take a connection and upsert the data using sql
     # iterate through the map and for each key, write an upsert 
